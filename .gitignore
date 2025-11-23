@@ -1,10 +1,16 @@
-.gradle
-.vscode
-/build
-/gradle
-build.gradle
-gradlew
-gradlew.bat
-settings.gradle
-runtime
-myExe
+# Gradle
+.gradle/
+build/
+runtime/
+myExe/
+
+# IntelliJ / VSCode
+.idea/
+.vscode/
+*.iml
+
+# Jars created manually
+*.jar
+
+# Logs
+*.log

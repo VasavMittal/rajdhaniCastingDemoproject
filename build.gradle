@@ -1,0 +1,70 @@
+plugins {
+    id 'application'
+}
+
+group = 'com.ranjdhaniCastingDemoproject'
+version = '0.1.0'
+
+repositories {
+    mavenCentral()
+}
+
+dependencies {
+    def javafxVersion = '21.0.2'
+    def os = org.gradle.internal.os.OperatingSystem.current()
+    def platform = os.isWindows() ? 'win' : (os.isMacOsX() ? 'mac' : 'linux')
+
+    implementation "org.openjfx:javafx-base:${javafxVersion}:${platform}"
+    implementation "org.openjfx:javafx-controls:${javafxVersion}:${platform}"
+    implementation "org.openjfx:javafx-graphics:${javafxVersion}:${platform}"
+}
+
+java {
+    toolchain {
+        languageVersion = JavaLanguageVersion.of(21)
+        vendor = JvmVendorSpec.matching("Oracle")
+    }
+}
+
+application {
+    mainClass = 'com.ranjdhaniCastingDemoproject.demo.Main'
+    applicationDefaultJvmArgs = ["--add-opens=javafx.graphics/javafx.stage=ALL-UNNAMED"]
+}
+
+run {
+    doFirst {
+        jvmArgs = [
+            "--module-path", configurations.runtimeClasspath.asPath,
+            "--add-modules", "javafx.controls,javafx.graphics"
+        ]
+    }
+}
+
+tasks.register('fatJar', Jar) {
+    group = 'build'
+    archiveClassifier.set('all')
+    duplicatesStrategy = DuplicatesStrategy.EXCLUDE
+
+    manifest {
+        attributes("Main-Class": application.mainClass.get())
+    }
+
+    from(sourceSets.main.output)
+
+    dependsOn(configurations.runtimeClasspath)
+
+    from {
+        configurations.runtimeClasspath.get()
+            .findAll { it.name.endsWith('jar') }
+            .collect { zipTree(it) }
+    }
+}
+
+jar {
+    manifest {
+        attributes(
+            'Main-Class': 'com.ranjdhaniCastingDemoproject.demo.Main'
+        )
+    }
+}
+

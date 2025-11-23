@@ -1,16 +1,14 @@
 name: Build Mac DMG
 
 on:
-  workflow_dispatch:   # Run manually
-  push:
-    branches: [ main ] # optional
+  workflow_dispatch:   # Run manually from GitHub
 
 jobs:
   build-mac:
     runs-on: macos-latest
 
     steps:
-      - name: Checkout repository
+      - name: Checkout code
         uses: actions/checkout@v4
 
       - name: Install JDK 21
@@ -19,22 +17,22 @@ jobs:
           distribution: 'temurin'
           java-version: '21'
 
-      - name: Download JavaFX SDK 21
+      - name: Download JavaFX SDK 21 for macOS
         run: |
           curl -L https://download2.gluonhq.com/openjfx/21.0.1/openjfx-21.0.1_osx-x64_bin-sdk.zip -o javafx.zip
           unzip javafx.zip
           mv javafx-sdk-21.0.1 javafx
 
-      - name: Build with Gradle
+      - name: Build Jar with Gradle
         run: ./gradlew clean build --stacktrace
 
       - name: Create macOS DMG using jpackage
         run: |
-          /Users/runner/hostedtoolcache/temurin/21*/x64/bin/jpackage \
+          /Users/runner/hostedtoolcache/Temurin/21*/x64/bin/jpackage \
             --input build/libs \
             --main-jar rajdhaniCastingDemoproject-0.1.0.jar \
             --main-class com.ranjdhaniCastingDemoproject.demo.Main \
-            --name RajdhaniCastingDemo \
+            --name RajdhaniCastingDemoproject \
             --type dmg \
             --module-path javafx/lib \
             --add-modules javafx.controls,javafx.fxml,javafx.graphics \
@@ -43,5 +41,5 @@ jobs:
       - name: Upload DMG
         uses: actions/upload-artifact@v4
         with:
-          name: RajdhaniCastingDemo-mac
+          name: RajdhaniCastingDemoproject-mac
           path: output-mac

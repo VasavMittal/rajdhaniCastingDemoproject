@@ -1,16 +1,14 @@
-# Gradle
-.gradle/
+# IDE
+.vscode
+.idea
+
+# Gradle cache
+.gradle
 build/
+
+# Runtime and exe outputs
 runtime/
 myExe/
 
-# IntelliJ / VSCode
-.idea/
-.vscode/
-*.iml
-
-# Jars created manually
-*.jar
-
-# Logs
-*.log
+# DO NOT ignore gradle wrapper
+# DO NOT ignore build.gradle/settings.gradle

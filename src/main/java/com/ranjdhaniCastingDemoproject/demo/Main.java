@@ -7,6 +7,7 @@ import javafx.beans.binding.DoubleBinding;
 import javafx.geometry.Insets;
 import javafx.geometry.Pos;
 import javafx.scene.Scene;
+import javafx.scene.control.ComboBox;
 import javafx.scene.control.Label;
 import javafx.scene.control.ScrollPane;
 import javafx.scene.control.TextField;
@@ -46,6 +47,7 @@ public class Main extends Application {
     private final List<TextField> swFields = new ArrayList<>();
     private final List<TextField> priceFields = new ArrayList<>();
     private final List<TextField> qualityFields = new ArrayList<>();
+    private ComboBox<String> dustDiscountBox;
 
     private boolean subweightsFinished = false;
 
@@ -237,7 +239,7 @@ public class Main extends Application {
                 TextField sw = swLive.get(i);
                 if (focused == sw) {
                     String t = sw.getText().trim();
-                    if (t.equals("0") || t.equals("0.0") || t.equals("0.00")) {
+                    if (t.equals("0.0") || t.equals("0.00")) {
                         finishSubweightsFromLive(i);
                         return;
                     }
@@ -394,24 +396,105 @@ public class Main extends Application {
             TextField qual = makeQualityField(180);
 
             if (isDust) {
-                mul.setVisible(false); mul.setManaged(false);
-                priceRes.setVisible(false); priceRes.setManaged(false);
-                qual.setVisible(false); qual.setManaged(false);
 
+                // Placeholder for ×
+                Region mulEmpty = new Region();
+                mulEmpty.setPrefWidth(30);
+
+                // Placeholder for price field
+                Region priceEmpty = new Region();
+                priceEmpty.setPrefWidth(220);
+
+                // Editable ComboBox inside QUALITY column
+                ComboBox<String> discount = new ComboBox<>();
+                discount.setEditable(true);
+                discount.getItems().addAll("1.5", "1", "N");
+                discount.setValue("N");
+                discount.setPrefWidth(180);
+                discount.setStyle("-fx-border-color: black; -fx-border-width: 3;");
+                discount.getEditor().setFont(Font.font(fontSize.get() * 0.85));
+
+                // -------------------------------
+                // 1️⃣ Auto-open dropdown on focus
+                // -------------------------------
+                discount.focusedProperty().addListener((obs, oldV, newV) -> {
+                    if (newV) {
+                        Platform.runLater(discount::show);  // automatically open popup
+                    }
+                });
+
+                // ---------------------------------------
+                // 2️⃣ Support keyboard navigation + ENTER
+                // ---------------------------------------
+                discount.setOnKeyPressed(ev -> {
+                    switch (ev.getCode()) {
+
+                        case DOWN:   // show popup & navigate
+                            discount.show();
+                            break;
+
+                        case UP:
+                            discount.show();
+                            break;
+
+                        case ENTER:
+                            // commit typed value
+                            String entered = discount.getEditor().getText();
+                            if (!discount.getItems().contains(entered)) {
+                                discount.setValue(entered);
+                            }
+                            showTotals();     // proceed to totals
+                            ev.consume();
+                            break;
+                    }
+                });
+
+                // If cursor is inside editor (typing)
+                discount.getEditor().setOnKeyPressed(ev -> {
+                    if (ev.getCode() == KeyCode.ENTER) {
+                        String entered = discount.getEditor().getText();
+                        if (!discount.getItems().contains(entered)) {
+                            discount.setValue(entered);
+                        }
+                        showTotals();
+                        ev.consume();
+                    }
+                });
+
+                // ---------------------------------------
+                // 3️⃣ Update totals while typing/selecting
+                // ---------------------------------------
+                discount.valueProperty().addListener((o, ov, nv) -> updateTotalsIfVisible());
+                discount.getEditor().textProperty().addListener((o, ov, nv) -> updateTotalsIfVisible());
+
+                // -------------------------------
+                // Build dust row
+                // -------------------------------
                 HBox row = new HBox(12);
                 row.setAlignment(Pos.CENTER_LEFT);
-                row.getChildren().add(swR);
+                row.getChildren().addAll(swR, mulEmpty, priceEmpty, discount);
                 swArea.getChildren().add(row);
-            } else {
+
+                // Register fields in lists correctly
+                swFields.add(swR);
+                priceFields.add(null);                   // dust has NO price field
+                qualityFields.add(discount.getEditor()); // discount acts as a quality field
+
+                dustDiscountBox = discount;
+
+                continue;    // skip normal block
+            }
+            else {
+                // normal row
                 HBox row = new HBox(12);
                 row.setAlignment(Pos.CENTER_LEFT);
                 row.getChildren().addAll(swR, mul, priceRes, qual);
                 swArea.getChildren().add(row);
-            }
 
-            swFields.add(swR);
-            priceFields.add(priceRes);
-            qualityFields.add(qual);
+                swFields.add(swR);
+                priceFields.add(priceRes);
+                qualityFields.add(qual);
+            }
         }
 
         // Enable price editing now that SWs finished (option B)
@@ -439,13 +522,28 @@ public class Main extends Application {
         double p2 = safeParse(price2Field.getText());
         double qv = safeParse(q.getText());
 
-        double result = (p1 + p2 + qv) * (swKg / 1000.0);
-        priceOut.setText(moneyFmt.format(result));
-        priceOut.setVisible(true);
-        priceOut.setManaged(true);
+        // ----------------------------------------------
+        // NEW LOGIC:
+        // Row "price field" shows only raw rate (p1+p2+qv)
+        // ----------------------------------------------
+        double rowDisplayRate = p1 + p2 + qv;
+        priceOut.setText(moneyFmt.format(rowDisplayRate));   // SHOW ONLY RATE
 
+        // ----------------------------------------------
+        // TOTAL LOGIC STILL USES weight multiplication:
+        // (p1 + p2 + qv) * (subweight / 1000)
+        // updateTotalsIfVisible() already uses pf.getText()
+        // BUT we must store rate AND calculate real value separately
+        // ----------------------------------------------
+
+        // Store the ACTUAL price (rate × weight) inside TextField `priceOut` userData
+        double actualPrice = rowDisplayRate * (swKg / 1000.0);
+        priceOut.setUserData(actualPrice);
+
+        // Update totals
         updateTotalsIfVisible();
     }
+
 
     // ---------------- Totals, GST ----------------
     private void showTotals() {
@@ -516,15 +614,35 @@ public class Main extends Application {
     }
 
     private double totalsValue() {
-        double s = 0;
-        for (TextField pf : priceFields) {
-            if (!pf.isVisible()) continue;
-            String t = pf.getText().trim();
-            if (t.isEmpty()) continue;
-            try { s += Double.parseDouble(t.replace(",", "")); } catch (Exception ignored) {}
+        double total = 0;
+
+        // calculate row totals (rate × weight)
+        for (int i = 0; i < priceFields.size(); i++) {
+            TextField pf = priceFields.get(i);
+            if (pf == null || !pf.isVisible()) continue;
+
+            Object ud = pf.getUserData();
+            if (ud instanceof Double) {
+                total += (Double) ud;
+            }
         }
-        return s;
+
+        // ---- Apply dust discount (percentage of total) ----
+        if (dustDiscountBox != null) {
+            String v = dustDiscountBox.getValue();
+            double pct = 0;
+
+            if (v.equals("1.5")) pct = 1.5;
+            else if (v.equals("1")) pct = 1;
+
+            double discount = total * (pct / 100.0);
+            total -= discount;
+        }
+
+        return total;
     }
+
+
 
     private String totalsFormatted() {
         return moneyFmt.format(totalsValue());

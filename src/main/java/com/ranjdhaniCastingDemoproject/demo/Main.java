@@ -23,14 +23,26 @@ import java.util.List;
 
 public class Main extends Application {
 
+    // NOTE: root remains the BorderPane used for main layout.
     private BorderPane root;
+
+    // overlay stack that hosts root + floating truck box (prevents extra vertical gap)
+    private StackPane overlay;
 
     // Left (price stack top-left + main weight)
     private VBox leftContainer;
-    private VBox priceStack;      // Price1/Price2 small boxes (top-left, always in left container)
+    private VBox priceStack;      // Price1/Price2 small boxes (top-left)
     private TextField price1Field;
     private TextField price2Field;
     private TextField mainWeightField;
+
+    private HBox bottomButtons;
+    private javafx.scene.control.Button printButton;
+    private javafx.scene.control.Button resetButton;
+
+
+    // Top-right truck number (fixed)
+    private TextField truckNumberField;
 
     // Right: subweights area and totals area (wrapped inside ScrollPane)
     private VBox rightContainer;
@@ -47,7 +59,7 @@ public class Main extends Application {
     private final List<TextField> swFields = new ArrayList<>();
     private final List<TextField> priceFields = new ArrayList<>();
     private final List<TextField> qualityFields = new ArrayList<>();
-    private ComboBox<String> dustDiscountBox;
+    private ComboBox<String> dustDiscountBox; // reference to dust combo box
 
     private boolean subweightsFinished = false;
 
@@ -56,20 +68,43 @@ public class Main extends Application {
 
     @Override
     public void start(Stage stage) {
+        // Create main BorderPane layout
         root = new BorderPane();
         root.setStyle("-fx-background-color: white;");
 
-        Scene scene = new Scene(root, 1600, 900);
+        // Create overlay StackPane that will host the BorderPane and an overlaid truck box.
+        overlay = new StackPane();
+        overlay.getChildren().add(root);
+
+        Scene scene = new Scene(overlay, 1600, 900);
         fontSize = scene.heightProperty().divide(30);
 
         buildLeftContainer();   // creates priceStack + mainWeightField
         buildRightContainer(scene);
+        buildTopRightTruckField(); // creates truckNumberField in top-right (OVERLAY)
+        buildBottomButtons();
+        bottomButtons.setVisible(false);
+        bottomButtons.setManaged(false);
 
-        // Key handling (ENTER / ESC)
+
+        Platform.runLater(() -> {
+            truckNumberField.requestFocus();
+            truckNumberField.positionCaret(truckNumberField.getText().length());
+        });
+
+        // listeners to recompute when base prices change
+        price1Field.textProperty().addListener((o, ov, nv) -> recomputeAllRows());
+        price2Field.textProperty().addListener((o, ov, nv) -> recomputeAllRows());
+
+        // Key handling (ENTER / F1 reset / F4 exit)
         scene.setOnKeyPressed(ev -> {
-            if (ev.getCode() == KeyCode.ESCAPE) {
+            if (ev.getCode() == KeyCode.F1) {
                 resetAll(stage);
                 ev.consume();
+                return;
+            }
+            if (ev.getCode() == KeyCode.F4) {
+                Platform.exit();
                 return;
             }
             if (ev.getCode() == KeyCode.ENTER) {
@@ -82,14 +117,100 @@ public class Main extends Application {
         stage.setFullScreen(true);
         stage.setTitle("Rajdhani Casting Demo");
         stage.show();
+    }
 
-        stage.setOnShown(e -> {
-            Platform.runLater(() -> {
-                mainWeightField.requestFocus();
-                mainWeightField.positionCaret(mainWeightField.getText().length());
-            });
+    private void buildBottomButtons() {
+
+        printButton = new javafx.scene.control.Button("PRINT");
+        resetButton = new javafx.scene.control.Button("RESET");
+
+        printButton.setPrefWidth(200);
+        resetButton.setPrefWidth(200);
+
+        printButton.setStyle(
+                "-fx-font-size: 24px; " +
+                "-fx-border-color: black; " +
+                "-fx-border-width: 3; " +
+                "-fx-background-color: white;"
+        );
+
+        resetButton.setStyle(
+                "-fx-font-size: 24px; " +
+                "-fx-border-color: black; " +
+                "-fx-border-width: 3; " +
+                "-fx-background-color: white;"
+        );
+
+        // When PRINT has focus → blue border + light-blue background
+        printButton.focusedProperty().addListener((obs, oldV, newV) -> {
+            if (newV)
+                printButton.setStyle("-fx-font-size: 24px; -fx-border-color: #007BFF; -fx-border-width: 4; -fx-background-color: #D6E9FF;");
+            else
+                printButton.setStyle("-fx-font-size: 24px; -fx-border-color: black; -fx-border-width: 3; -fx-background-color: white;");
         });
 
+        // When RESET has focus → red border + light-red background
+        resetButton.focusedProperty().addListener((obs, oldV, newV) -> {
+            if (newV)
+                resetButton.setStyle("-fx-font-size: 24px; -fx-border-color: #FF3B3B; -fx-border-width: 4; -fx-background-color: #FFD6D6;");
+            else
+                resetButton.setStyle("-fx-font-size: 24px; -fx-border-color: black; -fx-border-width: 3; -fx-background-color: white;");
+        });
+
+
+        printButton.setFocusTraversable(true);
+        resetButton.setFocusTraversable(true);
+
+        // ENTER actions
+        printButton.setOnAction(e -> printSlip());
+        resetButton.setOnAction(e -> resetAll((Stage) overlay.getScene().getWindow()));
+
+        // Arrow key navigation
+        printButton.setOnKeyPressed(ev -> {
+            if (ev.getCode() == KeyCode.RIGHT) resetButton.requestFocus();
+        });
+
+        resetButton.setOnKeyPressed(ev -> {
+            if (ev.getCode() == KeyCode.LEFT) printButton.requestFocus();
+        });
+
+        bottomButtons = new HBox(20);
+        bottomButtons.setAlignment(Pos.BOTTOM_RIGHT);
+        bottomButtons.setPadding(new Insets(0, 40, 30, 0));
+        bottomButtons.getChildren().addAll(printButton, resetButton);
+
+        bottomButtons.setVisible(false);
+        bottomButtons.setManaged(false);
+
+        overlay.getChildren().add(bottomButtons);
+        StackPane.setAlignment(bottomButtons, Pos.BOTTOM_RIGHT);
+    }
+
+    private void printSlip() {
+        System.out.println("PRINT clicked — integrate printer later.");
+    }
+
+
+
+    // ---------------- Build top-right truck field (fixed, overlaid so it doesn't add height) ----------------
+    private void buildTopRightTruckField() {
+        truckNumberField = new TextField();
+        truckNumberField.setPromptText("Truck Number");
+        truckNumberField.setPrefWidth(260);
+        truckNumberField.fontProperty().bind(Bindings.createObjectBinding(
+                () -> Font.font(fontSize.get()), fontSize));
+        truckNumberField.setStyle("-fx-border-color: black; -fx-border-width: 3; -fx-background-color: white;");
+
+        // Container to host the truck field but NOT affect the BorderPane layout
+        HBox topBar = new HBox();
+        topBar.setPadding(new Insets(8, 24, 0, 0)); // minimal padding; adjust if needed
+        topBar.setAlignment(Pos.TOP_RIGHT);
+        topBar.getChildren().add(truckNumberField);
+
+        // Add the topBar to overlay (on top of the BorderPane)
+        overlay.getChildren().add(topBar);
+        StackPane.setAlignment(topBar, Pos.TOP_RIGHT);
+        StackPane.setMargin(topBar, new Insets(8, 24, 0, 0));
     }
 
     // ---------------- Build left container (price stack above main weight) ----------------
@@ -100,14 +221,14 @@ public class Main extends Application {
         leftContainer.setSpacing(12);
         leftContainer.setPrefWidth(520);
 
-        // Price stack (top-left) — VISIBLE from start but DISABLED (not editable) until SW finished
+        // Price stack (top-left) — VISIBLE from start but DISABLED until SW finished
         priceStack = new VBox(8);
         priceStack.setAlignment(Pos.TOP_LEFT);
         price1Field = makeField("Price 1 (per ton)", 220);
         price2Field = makeField("Price 2 (per ton)", 220);
         priceStack.getChildren().addAll(price1Field, price2Field);
 
-        // show priceStack visually, but disable editing until subweights finish (option B)
+        // show priceStack visually, but disable editing until subweights finish
         priceStack.setVisible(true);
         priceStack.setManaged(true);
         price1Field.setDisable(true);
@@ -227,6 +348,12 @@ public class Main extends Application {
     private void handleEnter(Stage stage) {
         Object focused = stage.getScene().getFocusOwner();
 
+        // If focus on truck number -> go to main weight
+        if (focused == truckNumberField) {
+            mainWeightField.requestFocus();
+            return;
+        }
+
         // If focus on main weight -> go to first SW
         if (focused == mainWeightField) {
             if (!swLive.isEmpty()) swLive.get(0).requestFocus();
@@ -239,7 +366,7 @@ public class Main extends Application {
                 TextField sw = swLive.get(i);
                 if (focused == sw) {
                     String t = sw.getText().trim();
-                    if (t.equals("0.0") || t.equals("0.00")) {
+                    if (t.equals("0") || t.equals("0.0") || t.equals("0.00")) {
                         finishSubweightsFromLive(i);
                         return;
                     }
@@ -251,14 +378,14 @@ public class Main extends Application {
             }
         }
 
-        // After SW finished: Price1 -> Price2 -> first quality
+        // After SW finished: Price1 -> Price2 -> first quality-like field
         if (focused == price1Field) {
             if (!price2Field.isDisabled()) price2Field.requestFocus();
             return;
         }
         if (focused == price2Field) {
             for (TextField q : qualityFields) {
-                if (q.isVisible()) { q.requestFocus(); return; }
+                if (q != null && q.isVisible()) { q.requestFocus(); return; }
             }
             return;
         }
@@ -266,6 +393,7 @@ public class Main extends Application {
         // Quality fields: compute row price and advance
         for (int i = 0; i < qualityFields.size(); i++) {
             TextField q = qualityFields.get(i);
+            if (q == null) continue;
             if (focused == q) {
                 computeRowPrice(i);
                 int next = nextVisibleQuality(i);
@@ -278,12 +406,20 @@ public class Main extends Application {
         // If focus in GST -> apply
         if (focused == gstField) {
             applyGst();
+
+            // SHOW BOTTOM BUTTONS
+            bottomButtons.setVisible(true);
+            bottomButtons.setManaged(true);
+
+            // Focus goes to PRINT button
+            Platform.runLater(() -> printButton.requestFocus());
         }
     }
 
     private int nextVisibleQuality(int from) {
         for (int j = from + 1; j < qualityFields.size(); j++) {
-            if (qualityFields.get(j).isVisible()) return j;
+            TextField tf = qualityFields.get(j);
+            if (tf != null && tf.isVisible()) return j;
         }
         return -1;
     }
@@ -517,24 +653,15 @@ public class Main extends Application {
 
         double swKg = safeParse(sw.getText());
         if (swKg <= 0) return;
+        if (priceOut == null) return; // safety for dust row
 
         double p1 = safeParse(price1Field.getText());
         double p2 = safeParse(price2Field.getText());
         double qv = safeParse(q.getText());
 
-        // ----------------------------------------------
-        // NEW LOGIC:
         // Row "price field" shows only raw rate (p1+p2+qv)
-        // ----------------------------------------------
         double rowDisplayRate = p1 + p2 + qv;
         priceOut.setText(moneyFmt.format(rowDisplayRate));   // SHOW ONLY RATE
-
-        // ----------------------------------------------
-        // TOTAL LOGIC STILL USES weight multiplication:
-        // (p1 + p2 + qv) * (subweight / 1000)
-        // updateTotalsIfVisible() already uses pf.getText()
-        // BUT we must store rate AND calculate real value separately
-        // ----------------------------------------------
 
         // Store the ACTUAL price (rate × weight) inside TextField `priceOut` userData
         double actualPrice = rowDisplayRate * (swKg / 1000.0);
@@ -544,6 +671,17 @@ public class Main extends Application {
         updateTotalsIfVisible();
     }
 
+    // recompute all rows when base prices change
+    private void recomputeAllRows() {
+        for (int i = 0; i < priceFields.size(); i++) {
+            TextField pf = priceFields.get(i);
+            TextField q = null;
+            if (i < qualityFields.size()) q = qualityFields.get(i);
+            if (pf != null && q != null && q.isVisible()) {
+                computeRowPrice(i);
+            }
+        }
+    }
 
     // ---------------- Totals, GST ----------------
     private void showTotals() {
@@ -594,7 +732,6 @@ public class Main extends Application {
         gstField.requestFocus();
     }
 
-
     private void applyGst() {
         double gst = safeParse(gstField.getText());
         double total = totalsValue();
@@ -603,7 +740,6 @@ public class Main extends Application {
         Label lbl = (Label) totalsArea.lookup("#finalValue");
         if (lbl != null) lbl.setText(moneyFmt.format(finalV));
     }
-
 
     private void updateTotalsIfVisible() {
         if (!totalsArea.isVisible()) return;
@@ -616,7 +752,7 @@ public class Main extends Application {
     private double totalsValue() {
         double total = 0;
 
-        // calculate row totals (rate × weight)
+        // calculate row totals (rate × weight) using stored userData
         for (int i = 0; i < priceFields.size(); i++) {
             TextField pf = priceFields.get(i);
             if (pf == null || !pf.isVisible()) continue;
@@ -632,8 +768,8 @@ public class Main extends Application {
             String v = dustDiscountBox.getValue();
             double pct = 0;
 
-            if (v.equals("1.5")) pct = 1.5;
-            else if (v.equals("1")) pct = 1;
+            if ("1.5".equals(v)) pct = 1.5;
+            else if ("1".equals(v)) pct = 1;
 
             double discount = total * (pct / 100.0);
             total -= discount;
@@ -641,8 +777,6 @@ public class Main extends Application {
 
         return total;
     }
-
-
 
     private String totalsFormatted() {
         return moneyFmt.format(totalsValue());
@@ -663,10 +797,20 @@ public class Main extends Application {
         swFields.clear();
         priceFields.clear();
         qualityFields.clear();
+        dustDiscountBox = null;
 
+        // clear truck number too
+        if (truckNumberField != null) truckNumberField.clear();
+
+        if (bottomButtons != null) {
+            bottomButtons.setVisible(false);
+            bottomButtons.setManaged(false);
+        }
         // rebuild left container (keep priceStack in left) — price fields disabled again
         root.setLeft(null);
         buildLeftContainer();
+        Platform.runLater(() -> truckNumberField.requestFocus());
+
 
         // rebuild right container and scrollpane
         rightContainer.getChildren().clear();
@@ -698,7 +842,15 @@ public class Main extends Application {
         root.setCenter(rightScrollPane);
 
         mainWeightField.clear();
-        mainWeightField.requestFocus();
+
+        // force focus AFTER UI fully rebuilds
+        Platform.runLater(() -> {
+            if (truckNumberField != null) {
+                truckNumberField.requestFocus();
+                truckNumberField.positionCaret(truckNumberField.getText().length());
+            }
+        });
+
     }
 
     public static void main(String[] args) {

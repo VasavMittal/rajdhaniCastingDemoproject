@@ -9,6 +9,7 @@ build/
 # Runtime and exe outputs
 runtime/
 myExe/
-
+runtime-jmods/
+dist/
 # DO NOT ignore gradle wrapper
 # DO NOT ignore build.gradle/settings.gradle

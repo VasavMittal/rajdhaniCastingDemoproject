@@ -802,7 +802,7 @@ public class Main extends Application {
             float pageW = rect.getWidth();
             float pageH = rect.getHeight();
 
-            // ZERO MARGINS - absolute edge printing
+            // ZERO MARGINS - but add top margin for pinning
             float marginLeft = 0f;
             float marginTop  = 0f;
 
@@ -810,8 +810,8 @@ public class Main extends Application {
             float xRight  = 262f;    // adjust right boundary
             float xCenter = 132f;    // center point
 
-            // START AT ABSOLUTE TOP
-            final float[] y = { pageH - 5f };  // just 2px from top
+            // START WITH TOP MARGIN for pinning area
+            final float[] y = { pageH - 40f };  // 40px from top instead of 2px
 
             PDType1Font font = PDType1Font.HELVETICA;
 

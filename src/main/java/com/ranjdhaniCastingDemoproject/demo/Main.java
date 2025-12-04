@@ -799,19 +799,22 @@ public class Main extends Application {
             doc.addPage(page);
 
             PDRectangle rect = page.getMediaBox();
-            float pageW = rect.getWidth();
-            float pageH = rect.getHeight();
+            float pageW = rect.getWidth();   // A4 = 595px
+            float pageH = rect.getHeight();  // A4 = 842px
 
-            // ZERO MARGINS - but add top margin for pinning
-            float marginLeft = 0f;
-            float marginTop  = 0f;
+            // 2cm = 56.69 pixels (1cm = 28.35px)
+            float topMargin = 56.69f;  // 2cm from top
+            
+            // Center the slip horizontally on A4
+            float slipWidth = 260f;
+            float leftMargin = (pageW - slipWidth) / 2f;  // Center horizontally
 
-            float xLeft   = 2f;      // just 2px from left edge
-            float xRight  = 262f;    // adjust right boundary
-            float xCenter = 132f;    // center point
+            float xLeft   = leftMargin;
+            float xRight  = leftMargin + slipWidth;
+            float xCenter = leftMargin + (slipWidth / 2f);
 
-            // START WITH TOP MARGIN for pinning area
-            final float[] y = { pageH - 40f };  // 40px from top instead of 2px
+            // START WITH 2CM TOP MARGIN
+            final float[] y = { pageH - topMargin };
 
             PDType1Font font = PDType1Font.HELVETICA;
 
